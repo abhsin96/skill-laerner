@@ -22,6 +22,7 @@ export function AchievementSummary({
   totalBadges,
   recentBadges,
 }: AchievementSummaryProps) {
+ 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">

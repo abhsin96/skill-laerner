@@ -158,6 +158,8 @@ export default async function DashboardPage() {
     )
     .limit(3)
 
+    console.log(userStats)
+
   return (
     <DashboardLayout>
       <div className="container p-4 md:p-6 space-y-6">

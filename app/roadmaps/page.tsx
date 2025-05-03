@@ -72,11 +72,31 @@ export default async function RoadmapsPage() {
       const completedCount = completedModules?.length || 0
       const progress = totalModules > 0 ? Math.round((completedCount / totalModules) * 100) : 0
 
+      // If progress is 100% and roadmap is not marked as completed, update it
+      if (progress === 100 && !userRoadmap.completed) {
+        await supabase
+          .from("user_roadmaps")
+          .update({ completed: true })
+          .eq("id", userRoadmap.id)
+        
+        // Update user stats
+        await supabase
+          .from("user_stats")
+          .upsert({
+            user_id: session.user.id,
+            roadmaps_completed: 1,
+            xp_earned: 500 // XP reward for completing a roadmap
+          }, {
+            onConflict: 'user_id'
+          })
+      }
+
       return {
         ...userRoadmap,
         progress,
         totalModules,
-        completedModules: completedCount
+        completedModules: completedCount,
+        completed: progress === 100 || userRoadmap.completed
       }
     })
   )

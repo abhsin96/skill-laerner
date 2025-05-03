@@ -96,12 +96,38 @@ export function ModuleProgressButton({
         throw error
       }
 
+      // Get current user stats
+      const { data: currentStats } = await supabase
+        .from("user_stats")
+        .select("*")
+        .eq("user_id", userId)
+        .single()
+
       // Update user stats and check for badges
-      await updateUserStats(userId, {
-        modulesCompleted: newStatus === "completed" ? 1 : 0,
-        earlyBirdCompletions: newStatus === "completed" && isEarlyBird ? 1 : 0,
-        nightOwlCompletions: newStatus === "completed" && isNightOwl ? 1 : 0,
-      })
+      if (newStatus === "completed") {
+        const updates = {
+          modules_completed: (currentStats?.modules_completed || 0) + 1,
+          early_bird_completions: isEarlyBird ? (currentStats?.early_bird_completions || 0) + 1 : currentStats?.early_bird_completions || 0,
+          night_owl_completions: isNightOwl ? (currentStats?.night_owl_completions || 0) + 1 : currentStats?.night_owl_completions || 0,
+          xp_earned: (currentStats?.xp_earned || 0) + (xpReward || 0)
+        }
+
+        const { error: statsError } = await supabase
+          .from("user_stats")
+          .upsert({
+            user_id: userId,
+            ...updates,
+            roadmaps_completed: currentStats?.roadmaps_completed || 0,
+            discussions_created: currentStats?.discussions_created || 0,
+            comments_made: currentStats?.comments_made || 0,
+            consecutive_days: currentStats?.consecutive_days || 0,
+            perfect_weeks: currentStats?.perfect_weeks || 0
+          })
+
+        if (statsError) {
+          throw statsError
+        }
+      }
 
       setStatus(newStatus)
       onStatusChange?.(newStatus)

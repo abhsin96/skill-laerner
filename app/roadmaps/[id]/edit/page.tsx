@@ -549,7 +549,7 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure you want to delete this roadmap?</AlertDialogTitle>
-                <AlertDialogDescription>
+                {/* <AlertDialogDescription> */}
                   This action cannot be undone. This will permanently delete the roadmap and all its associated content including:
                   <ul className="list-disc list-inside mt-2">
                     <li>All modules and their content</li>
@@ -557,7 +557,7 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
                     <li>User progress data</li>
                     <li>Discussion threads</li>
                   </ul>
-                </AlertDialogDescription>
+                {/* </AlertDialogDescription> */}
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>

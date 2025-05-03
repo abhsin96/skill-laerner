@@ -61,6 +61,7 @@ export default async function AchievementsPage() {
     },
     {} as Record<string, typeof badgesWithProgress>
   )
+  console.log(userStats)
 
   return (
     <DashboardLayout>
