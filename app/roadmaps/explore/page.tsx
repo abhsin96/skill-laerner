@@ -57,7 +57,7 @@ export default function ExploreRoadmapsPage() {
         .eq("user_id", user.id)
         .single()
 
-      // Get user's existing roadmap IDs
+      // Get user's enrolled roadmaps (both active and completed)
       const { data: userRoadmaps } = await supabase
         .from("user_roadmaps")
         .select("roadmap_id")
@@ -73,6 +73,7 @@ export default function ExploreRoadmapsPage() {
           modules:modules(count),
           enrolled:user_roadmaps(count)
         `)
+        .not("id", "in", userRoadmapIds) // Exclude user's enrolled roadmaps
         .limit(6)
 
       // Get all roadmaps with additional data
@@ -83,6 +84,7 @@ export default function ExploreRoadmapsPage() {
           modules:modules(count),
           enrolled:user_roadmaps(count)
         `)
+        .not("id", "in", userRoadmapIds) // Exclude user's enrolled roadmaps
         .order(sortBy === "newest" ? "created_at" : "title", { ascending: sortBy === "newest" ? false : true })
 
       if (recommended) {
@@ -99,12 +101,7 @@ export default function ExploreRoadmapsPage() {
       }
 
       if (all) {
-        // Filter out user's enrolled roadmaps if any exist
-        const filteredAll = userRoadmapIds.length > 0
-          ? all.filter(r => !userRoadmapIds.includes(r.id))
-          : all
-
-        setRoadmaps(filteredAll.map(r => ({
+        setRoadmaps(all.map(r => ({
           ...r,
           modules_count: r.modules?.[0]?.count || 0,
           enrolled_count: r.enrolled?.[0]?.count || 0
@@ -112,7 +109,7 @@ export default function ExploreRoadmapsPage() {
 
         // Group roadmaps by category
         const byCategory: Record<string, Roadmap[]> = {}
-        filteredAll.forEach((roadmap) => {
+        all.forEach((roadmap) => {
           if (!byCategory[roadmap.skill_category]) {
             byCategory[roadmap.skill_category] = []
           }
@@ -175,30 +172,32 @@ export default function ExploreRoadmapsPage() {
   return (
     <DashboardLayout>
       <div className="container p-4 md:p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Explore Roadmaps</h1>
-          <p className="text-muted-foreground">Discover new skills and learning paths</p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Explore Roadmaps</h1>
+            <p className="text-muted-foreground">Discover new learning paths and skills</p>
+          </div>
+          <div className="flex gap-2">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="title">Alphabetical</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search roadmaps..." 
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="title">Alphabetical</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="relative">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search roadmaps..." 
+            className="pl-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
 
         <Tabs defaultValue="recommended" className="space-y-4">
