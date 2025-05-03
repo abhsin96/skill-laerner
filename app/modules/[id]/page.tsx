@@ -22,6 +22,15 @@ interface Resource {
   url: string
 }
 
+interface Progress {
+  id: string
+  user_id: string
+  module_id: string
+  status: "not_started" | "in_progress" | "completed"
+  completed_at: string | null
+  created_at: string
+}
+
 export default function ModulePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const router = useRouter()
@@ -30,7 +39,7 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
   const [module, setModule] = useState<any>(null)
   const [resources, setResources] = useState<Resource[]>([])
   const [discussions, setDiscussions] = useState<any[]>([])
-  const [progress, setProgress] = useState<any>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<Resource | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -229,12 +238,19 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
                 <CardDescription>{module.description}</CardDescription>
               </CardHeader>
               <CardFooter>
-                {userId && (
+                {userId && progress && (
                   <ModuleProgressButton
                     userId={userId}
                     moduleId={resolvedParams.id}
-                    currentStatus={progress?.status}
+                    currentStatus={progress.status}
                     xpReward={module.xp_reward}
+                    onStatusChange={(newStatus) => {
+                      setProgress(prev => prev ? {
+                        ...prev,
+                        status: newStatus,
+                        completed_at: newStatus === "completed" ? new Date().toISOString() : null
+                      } : null)
+                    }}
                   />
                 )}
               </CardFooter>

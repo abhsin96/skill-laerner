@@ -12,12 +12,20 @@ interface ModuleProgressButtonProps {
   moduleId: string
   currentStatus: "not_started" | "in_progress" | "completed"
   xpReward: number
+  onStatusChange?: (newStatus: "not_started" | "in_progress" | "completed") => void
 }
 
-export default function ModuleProgressButton({ userId, moduleId, currentStatus, xpReward }: ModuleProgressButtonProps) {
+export default function ModuleProgressButton({ 
+  userId, 
+  moduleId, 
+  currentStatus, 
+  xpReward,
+  onStatusChange 
+}: ModuleProgressButtonProps) {
   const router = useRouter()
   const { supabase } = useSupabase()
   const [isLoading, setIsLoading] = useState(false)
+  const [status, setStatus] = useState(currentStatus)
 
   const handleUpdateProgress = async () => {
     setIsLoading(true)
@@ -26,9 +34,9 @@ export default function ModuleProgressButton({ userId, moduleId, currentStatus, 
       let newStatus: "not_started" | "in_progress" | "completed"
       let xpToAward = 0
 
-      if (currentStatus === "not_started") {
+      if (status === "not_started") {
         newStatus = "in_progress"
-      } else if (currentStatus === "in_progress") {
+      } else if (status === "in_progress") {
         newStatus = "completed"
         xpToAward = xpReward
       } else {
@@ -37,19 +45,51 @@ export default function ModuleProgressButton({ userId, moduleId, currentStatus, 
         return
       }
 
-      // Update progress status
-      const { error: progressError } = await supabase
+      // First, check if progress entry exists
+      const { data: existingProgress, error: checkError } = await supabase
         .from("user_progress")
-        .update({
-          status: newStatus,
-          completed_at: newStatus === "completed" ? new Date().toISOString() : null,
-        })
+        .select("*")
         .eq("user_id", userId)
         .eq("module_id", moduleId)
+        .single()
+
+      if (checkError && checkError.code !== "PGRST116") { // PGRST116 is "no rows returned" error
+        throw checkError
+      }
+
+      let progressError
+      if (!existingProgress) {
+        // Create new progress entry
+        const { error } = await supabase
+          .from("user_progress")
+          .insert({
+            user_id: userId,
+            module_id: moduleId,
+            status: newStatus,
+            completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+          })
+        progressError = error
+      } else {
+        // Update existing progress
+        const { error } = await supabase
+          .from("user_progress")
+          .update({
+            status: newStatus,
+            completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+          })
+          .eq("user_id", userId)
+          .eq("module_id", moduleId)
+        progressError = error
+      }
 
       if (progressError) {
         throw progressError
       }
+
+      // Update local state
+      setStatus(newStatus)
+      // Notify parent component
+      onStatusChange?.(newStatus)
 
       // Award XP if module is completed
       if (xpToAward > 0) {
@@ -87,7 +127,7 @@ export default function ModuleProgressButton({ userId, moduleId, currentStatus, 
     }
   }
 
-  if (currentStatus === "completed") {
+  if (status === "completed") {
     return (
       <Button variant="outline" disabled className="w-full">
         <CheckCircle className="mr-2 h-4 w-4" /> Module Completed
@@ -101,7 +141,7 @@ export default function ModuleProgressButton({ userId, moduleId, currentStatus, 
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...
         </>
-      ) : currentStatus === "not_started" ? (
+      ) : status === "not_started" ? (
         <>
           <Play className="mr-2 h-4 w-4" /> Start Module
         </>
