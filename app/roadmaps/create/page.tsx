@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2, Plus, Trash2, Upload } from "lucide-react"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -26,86 +26,149 @@ interface Resource {
   description: string
   type: "blog" | "quiz" | "video"
   url: string
+  videoFile?: File | null
 }
 
 export default function CreateRoadmapPage() {
   const router = useRouter()
   const { supabase } = useSupabase()
   const [isLoading, setIsLoading] = useState(false)
-  const [modules, setModules] = useState<Module[]>([
-    {
-      title: "",
-      description: "",
-      week_number: 1,
-      xp_reward: 100,
-      resources: [{ title: "", description: "", type: "blog", url: "" }],
-    },
-  ])
-
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     skill_category: "",
     duration_weeks: 1,
   })
+  const [modules, setModules] = useState<Module[]>([
+    {
+      title: "",
+      description: "",
+      week_number: 1,
+      xp_reward: 100,
+      resources: [],
+    },
+  ])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
-  }
-
-  const handleModuleChange = (index: number, field: keyof Module, value: any) => {
-    const newModules = [...modules]
-    newModules[index] = {
-      ...newModules[index],
-      [field]: value,
-    }
-    setModules(newModules)
-  }
-
-  const handleResourceChange = (moduleIndex: number, resourceIndex: number, field: keyof Resource, value: any) => {
-    const newModules = [...modules]
-    newModules[moduleIndex].resources[resourceIndex] = {
-      ...newModules[moduleIndex].resources[resourceIndex],
-      [field]: value,
-    }
-    setModules(newModules)
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
   const addModule = () => {
-    setModules([
-      ...modules,
+    setModules((prev) => [
+      ...prev,
       {
         title: "",
         description: "",
-        week_number: modules.length + 1,
+        week_number: prev.length + 1,
         xp_reward: 100,
-        resources: [{ title: "", description: "", type: "blog", url: "" }],
+        resources: [],
       },
     ])
   }
 
   const removeModule = (index: number) => {
-    setModules(modules.filter((_, i) => i !== index))
+    setModules((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleModuleChange = (index: number, field: keyof Module, value: any) => {
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === index ? { ...module, [field]: value } : module
+      )
+    )
   }
 
   const addResource = (moduleIndex: number) => {
-    const newModules = [...modules]
-    newModules[moduleIndex].resources.push({
-      title: "",
-      description: "",
-      type: "blog",
-      url: "",
-    })
-    setModules(newModules)
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === moduleIndex
+          ? {
+              ...module,
+              resources: [
+                ...module.resources,
+                {
+                  title: "",
+                  description: "",
+                  type: "blog",
+                  url: "",
+                  videoFile: null,
+                },
+              ],
+            }
+          : module
+      )
+    )
   }
 
   const removeResource = (moduleIndex: number, resourceIndex: number) => {
-    const newModules = [...modules]
-    newModules[moduleIndex].resources = newModules[moduleIndex].resources.filter((_, i) => i !== resourceIndex)
-    setModules(newModules)
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === moduleIndex
+          ? {
+              ...module,
+              resources: module.resources.filter((_, j) => j !== resourceIndex),
+            }
+          : module
+      )
+    )
+  }
+
+  const handleResourceChange = (
+    moduleIndex: number,
+    resourceIndex: number,
+    field: keyof Resource,
+    value: any
+  ) => {
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === moduleIndex
+          ? {
+              ...module,
+              resources: module.resources.map((resource, j) =>
+                j === resourceIndex ? { ...resource, [field]: value } : resource
+              ),
+            }
+          : module
+      )
+    )
+  }
+
+  const handleVideoFileChange = async (
+    moduleIndex: number,
+    resourceIndex: number,
+    file: File
+  ) => {
+    // Just store the file temporarily
+    handleResourceChange(moduleIndex, resourceIndex, "videoFile", file)
+    // Set a temporary URL for preview
+    handleResourceChange(moduleIndex, resourceIndex, "url", URL.createObjectURL(file))
+  }
+
+  const uploadVideo = async (file: File): Promise<string> => {
+    // Sanitize filename: remove spaces and special characters
+    const sanitizedFileName = `${Date.now()}-${file.name
+      .replace(/[^a-zA-Z0-9.-]/g, '_') // Replace special chars with underscore
+      .replace(/\s+/g, '_') // Replace spaces with underscore
+      .toLowerCase()}` // Convert to lowercase
+
+    const { error: uploadError } = await supabase.storage
+      .from("contentvideo")
+      .upload(sanitizedFileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error("Upload error:", uploadError)
+      throw uploadError
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from("contentvideo")
+      .getPublicUrl(sanitizedFileName)
+
+    return publicUrl
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,11 +176,11 @@ export default function CreateRoadmapPage() {
     setIsLoading(true)
 
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
-        throw new Error("No user found")
+        router.push("/login")
+        return
       }
 
       // Create roadmap
@@ -135,49 +198,51 @@ export default function CreateRoadmapPage() {
 
       if (roadmapError) throw roadmapError
 
-      // Create modules
+      // Create modules and upload videos
       for (const module of modules) {
-        const { error: moduleError } = await supabase.from("modules").insert({
-          roadmap_id: roadmap.id,
-          title: module.title,
-          description: module.description,
-          week_number: module.week_number,
-          xp_reward: module.xp_reward,
-        })
+        const { data: moduleData, error: moduleError } = await supabase
+          .from("modules")
+          .insert({
+            title: module.title,
+            description: module.description,
+            week_number: module.week_number,
+            xp_reward: module.xp_reward,
+            roadmap_id: roadmap.id,
+          })
+          .select()
+          .single()
 
         if (moduleError) throw moduleError
 
-        // Get the created module
-        const { data: createdModule } = await supabase
-          .from("modules")
-          .select("id")
-          .eq("title", module.title)
-          .eq("roadmap_id", roadmap.id)
-          .single()
-
-        if (!createdModule) {
-          throw new Error("Failed to create module")
-        }
-
-        // Create resources for the module
+        // Create resources and upload videos
         for (const resource of module.resources) {
-          const { error: resourceError } = await supabase.from("resources").insert({
-            module_id: createdModule.id,
-            title: resource.title,
-            description: resource.description,
-            type: resource.type,
-            url: resource.url,
-          })
+          let resourceUrl = resource.url
+          
+          // If it's a video resource with a file, upload it
+          if (resource.type === "video" && resource.videoFile) {
+            resourceUrl = await uploadVideo(resource.videoFile)
+          }
+
+          const { error: resourceError } = await supabase
+            .from("resources")
+            .insert({
+              title: resource.title,
+              description: resource.description,
+              type: resource.type,
+              url: resourceUrl,
+              module_id: moduleData.id,
+            })
 
           if (resourceError) throw resourceError
         }
       }
 
       toast({
-        title: "Roadmap created successfully",
+        title: "Roadmap created!",
+        description: "Your roadmap has been created successfully.",
       })
 
-      router.push("/dashboard")
+      router.push(`/roadmaps/${roadmap.id}`)
       router.refresh()
     } catch (error: any) {
       toast({
@@ -345,10 +410,108 @@ export default function CreateRoadmapPage() {
                     </div>
 
                     {module.resources.map((resource, resourceIndex) => (
-                      <div key={resourceIndex} className="space-y-4 p-4 border rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-medium">Resource {resourceIndex + 1}</h4>
-                          {module.resources.length > 1 && (
+                      <Card key={resourceIndex}>
+                        <CardContent className="p-4">
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Title</Label>
+                              <Input
+                                value={resource.title}
+                                onChange={(e) =>
+                                  handleResourceChange(
+                                    moduleIndex,
+                                    resourceIndex,
+                                    "title",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Resource title"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Description</Label>
+                              <Textarea
+                                value={resource.description}
+                                onChange={(e) =>
+                                  handleResourceChange(
+                                    moduleIndex,
+                                    resourceIndex,
+                                    "description",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Resource description"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Type</Label>
+                              <Select
+                                value={resource.type}
+                                onValueChange={(value) =>
+                                  handleResourceChange(
+                                    moduleIndex,
+                                    resourceIndex,
+                                    "type",
+                                    value
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="blog">Blog Post</SelectItem>
+                                  <SelectItem value="quiz">Quiz</SelectItem>
+                                  <SelectItem value="video">Video</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {resource.type === "video" ? (
+                              <div className="space-y-2">
+                                <Label>Video File</Label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="video/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) {
+                                        handleVideoFileChange(moduleIndex, resourceIndex, file)
+                                      }
+                                    }}
+                                    required
+                                  />
+                                  {resource.url && (
+                                    <span className="text-sm text-muted-foreground">
+                                      {resource.videoFile?.name || "Video selected"}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <Label>URL</Label>
+                                <Input
+                                  value={resource.url}
+                                  onChange={(e) =>
+                                    handleResourceChange(
+                                      moduleIndex,
+                                      resourceIndex,
+                                      "url",
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="Resource URL"
+                                  required
+                                />
+                              </div>
+                            )}
+
                             <Button
                               type="button"
                               variant="ghost"
@@ -357,54 +520,9 @@ export default function CreateRoadmapPage() {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Title</Label>
-                          <Input
-                            value={resource.title}
-                            onChange={(e) => handleResourceChange(moduleIndex, resourceIndex, "title", e.target.value)}
-                            placeholder="Resource title"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Description</Label>
-                          <Textarea
-                            value={resource.description}
-                            onChange={(e) => handleResourceChange(moduleIndex, resourceIndex, "description", e.target.value)}
-                            placeholder="Resource description"
-                            required
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Type</Label>
-                            <Select
-                              value={resource.type}
-                              onValueChange={(value) => handleResourceChange(moduleIndex, resourceIndex, "type", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="blog">Blog</SelectItem>
-                                <SelectItem value="quiz">Quiz</SelectItem>
-                                <SelectItem value="video">Video</SelectItem>
-                              </SelectContent>
-                            </Select>
                           </div>
-                          <div className="space-y-2">
-                            <Label>URL</Label>
-                            <Input
-                              value={resource.url}
-                              onChange={(e) => handleResourceChange(moduleIndex, resourceIndex, "url", e.target.value)}
-                              placeholder="Resource URL"
-                              required
-                            />
-                          </div>
-                        </div>
-                      </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </CardContent>
@@ -412,15 +530,18 @@ export default function CreateRoadmapPage() {
             ))}
           </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating Roadmap...
-              </>
-            ) : (
-              "Create Roadmap"
-            )}
-          </Button>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Roadmap"
+              )}
+            </Button>
+          </div>
         </form>
       </div>
     </DashboardLayout>

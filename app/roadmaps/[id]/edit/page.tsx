@@ -13,6 +13,7 @@ import { ArrowLeft, Loader2, Plus, Trash2, GripVertical } from "lucide-react"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DraggableProvided } from "@hello-pangea/dnd"
+import { Label } from "@/components/ui/label"
 
 const SKILL_CATEGORIES = [
   "Web Development",
@@ -29,12 +30,22 @@ const SKILL_CATEGORIES = [
   "Product Management",
 ]
 
+interface Resource {
+  id?: string
+  title: string
+  description: string
+  type: "blog" | "quiz" | "video"
+  url: string
+  videoFile?: File | null
+}
+
 interface Module {
   id: string
   title: string
   description: string
   week_number: number
   xp_reward: number
+  resources: Resource[]
 }
 
 interface Roadmap {
@@ -63,7 +74,8 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
     title: "",
     description: "",
     week_number: 1,
-    xp_reward: 100
+    xp_reward: 100,
+    resources: [] as Resource[]
   })
   const [isAddingModule, setIsAddingModule] = useState(false)
 
@@ -153,7 +165,7 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
         description: "Your changes have been saved successfully",
       })
 
-      router.push(`/roadmaps/${resolvedParams.id}`)
+      router.push(`/dashboard`)
       router.refresh()
     } catch (error: any) {
       toast({
@@ -166,9 +178,73 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  const addResource = (moduleIndex: number) => {
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === moduleIndex
+          ? {
+              ...module,
+              resources: [
+                ...module.resources,
+                {
+                  title: "",
+                  description: "",
+                  type: "blog",
+                  url: "",
+                  videoFile: null,
+                },
+              ],
+            }
+          : module
+      )
+    )
+  }
+
+  const removeResource = (moduleIndex: number, resourceIndex: number) => {
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === moduleIndex
+          ? {
+              ...module,
+              resources: module.resources.filter((_, j) => j !== resourceIndex),
+            }
+          : module
+      )
+    )
+  }
+
+  const handleResourceChange = (
+    moduleIndex: number,
+    resourceIndex: number,
+    field: keyof Resource,
+    value: any
+  ) => {
+    setModules((prev) =>
+      prev.map((module, i) =>
+        i === moduleIndex
+          ? {
+              ...module,
+              resources: module.resources.map((resource, j) =>
+                j === resourceIndex ? { ...resource, [field]: value } : resource
+              ),
+            }
+          : module
+      )
+    )
+  }
+
+  const handleVideoFileChange = async (
+    moduleIndex: number,
+    resourceIndex: number,
+    file: File
+  ) => {
+    handleResourceChange(moduleIndex, resourceIndex, "videoFile", file)
+    handleResourceChange(moduleIndex, resourceIndex, "url", URL.createObjectURL(file))
+  }
+
   const handleAddModule = async () => {
     try {
-      const { error } = await supabase
+      const { data: moduleData, error: moduleError } = await supabase
         .from("modules")
         .insert({
           roadmap_id: resolvedParams.id,
@@ -177,8 +253,50 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
           week_number: newModule.week_number,
           xp_reward: newModule.xp_reward
         })
+        .select()
+        .single()
 
-      if (error) throw error
+      if (moduleError) throw moduleError
+
+      // Create resources
+      for (const resource of newModule.resources) {
+        let resourceUrl = resource.url
+        
+        // If it's a video resource with a file, upload it
+        if (resource.type === "video" && resource.videoFile) {
+          const sanitizedFileName = `${Date.now()}-${resource.videoFile.name
+            .replace(/[^a-zA-Z0-9.-]/g, '_')
+            .replace(/\s+/g, '_')
+            .toLowerCase()}`
+
+          const { error: uploadError } = await supabase.storage
+            .from("contentvideo")
+            .upload(sanitizedFileName, resource.videoFile, {
+              cacheControl: "3600",
+              upsert: false,
+            })
+
+          if (uploadError) throw uploadError
+
+          const { data: { publicUrl } } = supabase.storage
+            .from("contentvideo")
+            .getPublicUrl(sanitizedFileName)
+
+          resourceUrl = publicUrl
+        }
+
+        const { error: resourceError } = await supabase
+          .from("resources")
+          .insert({
+            title: resource.title,
+            description: resource.description,
+            type: resource.type,
+            url: resourceUrl,
+            module_id: moduleData.id,
+          })
+
+        if (resourceError) throw resourceError
+      }
 
       toast({
         title: "Module added",
@@ -189,7 +307,8 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
         title: "",
         description: "",
         week_number: modules.length + 1,
-        xp_reward: 100
+        xp_reward: 100,
+        resources: []
       })
       setIsAddingModule(false)
       fetchRoadmapData()
@@ -204,16 +323,33 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
 
   const handleDeleteModule = async (moduleId: string) => {
     try {
-      const { error } = await supabase
+      // First, delete all resources for this module
+      const { error: resourcesError } = await supabase
+        .from("resources")
+        .delete()
+        .eq("module_id", moduleId)
+
+      if (resourcesError) throw resourcesError
+
+      // Then delete all user progress records for this module
+      const { error: progressError } = await supabase
+        .from("user_progress")
+        .delete()
+        .eq("module_id", moduleId)
+
+      if (progressError) throw progressError
+
+      // Finally delete the module
+      const { error: moduleError } = await supabase
         .from("modules")
         .delete()
         .eq("id", moduleId)
 
-      if (error) throw error
+      if (moduleError) throw moduleError
 
       toast({
         title: "Module deleted",
-        description: "The module has been removed successfully",
+        description: "The module and all its associated content have been removed successfully",
       })
 
       fetchRoadmapData()
@@ -467,6 +603,158 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
 
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold">Resources</h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNewModule({
+                          ...newModule,
+                          resources: [
+                            ...newModule.resources,
+                            {
+                              title: "",
+                              description: "",
+                              type: "blog",
+                              url: "",
+                              videoFile: null,
+                            },
+                          ],
+                        })}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Resource
+                      </Button>
+                    </div>
+
+                    {newModule.resources.map((resource, resourceIndex) => (
+                      <Card key={resourceIndex}>
+                        <CardContent className="p-4">
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Title</Label>
+                              <Input
+                                value={resource.title}
+                                onChange={(e) => {
+                                  const updatedResources = [...newModule.resources]
+                                  updatedResources[resourceIndex] = {
+                                    ...resource,
+                                    title: e.target.value
+                                  }
+                                  setNewModule({ ...newModule, resources: updatedResources })
+                                }}
+                                placeholder="Resource title"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Description</Label>
+                              <Textarea
+                                value={resource.description}
+                                onChange={(e) => {
+                                  const updatedResources = [...newModule.resources]
+                                  updatedResources[resourceIndex] = {
+                                    ...resource,
+                                    description: e.target.value
+                                  }
+                                  setNewModule({ ...newModule, resources: updatedResources })
+                                }}
+                                placeholder="Resource description"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Type</Label>
+                              <Select
+                                value={resource.type}
+                                onValueChange={(value) => {
+                                  const updatedResources = [...newModule.resources]
+                                  updatedResources[resourceIndex] = {
+                                    ...resource,
+                                    type: value as "blog" | "quiz" | "video"
+                                  }
+                                  setNewModule({ ...newModule, resources: updatedResources })
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="blog">Blog Post</SelectItem>
+                                  <SelectItem value="quiz">Quiz</SelectItem>
+                                  <SelectItem value="video">Video</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {resource.type === "video" ? (
+                              <div className="space-y-2">
+                                <Label>Video File</Label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="video/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) {
+                                        const updatedResources = [...newModule.resources]
+                                        updatedResources[resourceIndex] = {
+                                          ...resource,
+                                          videoFile: file,
+                                          url: URL.createObjectURL(file)
+                                        }
+                                        setNewModule({ ...newModule, resources: updatedResources })
+                                      }
+                                    }}
+                                    required
+                                  />
+                                  {resource.url && (
+                                    <span className="text-sm text-muted-foreground">
+                                      {resource.videoFile?.name || "Video selected"}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <Label>URL</Label>
+                                <Input
+                                  value={resource.url}
+                                  onChange={(e) => {
+                                    const updatedResources = [...newModule.resources]
+                                    updatedResources[resourceIndex] = {
+                                      ...resource,
+                                      url: e.target.value
+                                    }
+                                    setNewModule({ ...newModule, resources: updatedResources })
+                                  }}
+                                  placeholder="Resource URL"
+                                  required
+                                />
+                              </div>
+                            )}
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                const updatedResources = newModule.resources.filter((_, i) => i !== resourceIndex)
+                                setNewModule({ ...newModule, resources: updatedResources })
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
                   <div className="flex justify-end gap-2">
                     <Button
                       variant="outline"
@@ -476,7 +764,8 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
                           title: "",
                           description: "",
                           week_number: modules.length + 1,
-                          xp_reward: 100
+                          xp_reward: 100,
+                          resources: []
                         })
                       }}
                     >

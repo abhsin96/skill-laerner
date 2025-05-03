@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, CheckCircle, Circle, Clock, MessageSquare, Plus, Send } from "lucide-react"
+import { ArrowLeft, CheckCircle, Circle, Clock, MessageSquare, Plus, Send, Video } from "lucide-react"
 import Link from "next/link"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { formatDistanceToNow } from "date-fns"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Comment {
   id: string
@@ -54,6 +55,15 @@ interface Module {
     status: string
     completed_at: string | null
   }[]
+  resources: Resource[]
+}
+
+interface Resource {
+  id: string
+  title: string
+  description: string
+  type: "blog" | "quiz" | "video"
+  url: string
 }
 
 export default function RoadmapPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +81,7 @@ export default function RoadmapPage({ params }: { params: Promise<{ id: string }
   const [expandedDiscussions, setExpandedDiscussions] = useState<{ [key: string]: boolean }>({})
   const [isContentCurator, setIsContentCurator] = useState(false)
   const [defaultTab, setDefaultTab] = useState("modules")
+  const [selectedVideo, setSelectedVideo] = useState<Resource | null>(null)
 
   useEffect(() => {
     fetchRoadmapData()
@@ -101,7 +112,11 @@ export default function RoadmapPage({ params }: { params: Promise<{ id: string }
         .eq("user_id", user.id)
         .single()
 
-      setIsContentCurator(profile?.role === "content_curator")
+      // Redirect content curators to edit page
+      if (profile?.role === "content_curator") {
+        router.push(`/roadmaps/${resolvedParams.id}/edit`)
+        return
+      }
 
       // Check if user has this roadmap
       const { data: userRoadmap } = await supabase
@@ -111,7 +126,7 @@ export default function RoadmapPage({ params }: { params: Promise<{ id: string }
         .eq("roadmap_id", resolvedParams.id)
         .single()
 
-      if (!userRoadmap && profile?.role !== "content_curator") {
+      if (!userRoadmap) {
         router.push(`/roadmaps/${resolvedParams.id}/start`)
         return
       }
@@ -145,9 +160,9 @@ export default function RoadmapPage({ params }: { params: Promise<{ id: string }
         .eq("user_progress.user_id", user.id)
         .order("week_number", { ascending: true })
         
-        if (modulesData) {
-          setModules(modulesData)
-        }
+      if (modulesData) {
+        setModules(modulesData)
+      }
 
       // Get discussions
       const { data: discussionsData } = await supabase
@@ -380,6 +395,43 @@ export default function RoadmapPage({ params }: { params: Promise<{ id: string }
                             {isCompleted ? "Review Module" : isInProgress ? "Continue Module" : "Start Module"}
                           </Button>
                         </Link>
+                        <div className="space-y-4">
+                          <h3 className="font-semibold">Resources</h3>
+                          <div className="grid gap-4">
+                            {module?.resources?.map((resource) => (
+                              <Card key={resource.id}>
+                                <CardContent className="p-4">
+                                  <div className="flex items-start justify-between">
+                                    <div className="space-y-1">
+                                      <h4 className="font-medium">{resource.title}</h4>
+                                      <p className="text-sm text-muted-foreground">{resource.description}</p>
+                                    </div>
+                                    {resource.type === "video" ? (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setSelectedVideo(resource)}
+                                      >
+                                        <Video className="h-4 w-4 mr-2" />
+                                        Watch Video
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        asChild
+                                      >
+                                        <a href={resource.url} target="_blank" rel="noopener noreferrer">
+                                          {resource.type === "blog" ? "Read Article" : "Take Quiz"}
+                                        </a>
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
                   )
@@ -571,6 +623,26 @@ export default function RoadmapPage({ params }: { params: Promise<{ id: string }
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Add Video Player Modal */}
+      <Dialog open={!!selectedVideo} onOpenChange={() => setSelectedVideo(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{selectedVideo?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="aspect-video w-full">
+            <video
+              src={selectedVideo?.url}
+              controls
+              className="w-full h-full rounded-lg"
+              autoPlay
+            >
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">{selectedVideo?.description}</p>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
