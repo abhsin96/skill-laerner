@@ -116,8 +116,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex h-16 items-center justify-between px-4">
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 w-full">
+        <div className="flex h-16 items-center justify-between w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 md:gap-4">
             <Sheet>
               <SheetTrigger asChild>
@@ -126,19 +126,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <span className="sr-only">Toggle menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64">
+              <SheetContent side="left" className="w-[280px] sm:w-[320px]">
                 <Link href="/" className="flex items-center gap-2 py-4">
                   <BookOpen className="h-6 w-6 text-primary" />
                   <span className="text-xl font-bold">SkillKart</span>
                 </Link>
-                <nav className="grid gap-2 py-4">
+                <nav className="grid gap-1 py-4">
                   {navItems.map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted",
-                        pathname === item.href ? "bg-muted" : "transparent",
+                        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                        pathname === item.href ? "bg-accent text-accent-foreground" : "transparent",
                       )}
                     >
                       {item.icon}
@@ -154,8 +154,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                           key={item.href}
                           href={item.href}
                           className={cn(
-                            "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted",
-                            pathname === item.href ? "bg-muted" : "transparent",
+                            "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                            pathname === item.href ? "bg-accent text-accent-foreground" : "transparent",
                           )}
                         >
                           {item.icon}
@@ -172,7 +172,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="text-xl font-bold hidden md:inline-block">SkillKart</span>
             </Link>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
@@ -182,15 +182,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem asChild>
-                  <Link href="/profile">Profile</Link>
+                  <Link href="/profile" className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/settings">Settings</Link>
+                  <Link href="/settings" className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
+                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
                   <LogOut className="mr-2 h-4 w-4" />
                   Log out
                 </DropdownMenuItem>
@@ -201,14 +207,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </header>
       <div className="flex flex-1">
         <aside className="hidden w-64 border-r bg-background md:block">
-          <nav className="grid gap-2 p-4">
+          <nav className="grid gap-1 p-4">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted",
-                  pathname === item.href ? "bg-muted" : "transparent",
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                  pathname === item.href ? "bg-accent text-accent-foreground" : "transparent",
                 )}
               >
                 {item.icon}
@@ -224,8 +230,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted",
-                      pathname === item.href ? "bg-muted" : "transparent",
+                      "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                      pathname === item.href ? "bg-accent text-accent-foreground" : "transparent",
                     )}
                   >
                     {item.icon}
@@ -236,7 +242,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             )}
           </nav>
         </aside>
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   )

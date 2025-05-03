@@ -5,8 +5,8 @@ import { ArrowRight, BookOpen, Target, Users } from "lucide-react"
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b">
-        <div className="container flex items-center justify-between py-4">
+      <header className="border-b w-full">
+        <div className="flex items-center justify-between w-full h-20 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">SkillKart</span>

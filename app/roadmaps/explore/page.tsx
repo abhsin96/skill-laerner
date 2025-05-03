@@ -139,22 +139,22 @@ export default function ExploreRoadmapsPage() {
   )
 
   const RoadmapCard = ({ roadmap }: { roadmap: Roadmap }) => (
-    <Card key={roadmap.id} className="h-full">
-      <CardHeader>
-        <CardTitle>{roadmap.title}</CardTitle>
-        <CardDescription>{roadmap.description}</CardDescription>
+    <Card key={roadmap.id} className="h-full flex flex-col">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg md:text-xl line-clamp-2">{roadmap.title}</CardTitle>
+        <CardDescription className="line-clamp-2 mt-1">{roadmap.description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
+      <CardContent className="space-y-3 flex-grow">
+        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
             <span>{roadmap.duration_weeks} weeks</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <BookOpen className="h-4 w-4" />
             <span>{roadmap.modules_count || 0} modules</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <Users className="h-4 w-4" />
             <span>{roadmap.enrolled_count || 0} enrolled</span>
           </div>
@@ -162,24 +162,26 @@ export default function ExploreRoadmapsPage() {
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">{roadmap.skill_category}</span>
         </div>
-        <Link href={`/roadmaps/${roadmap.id}/start`}>
-          <Button className="w-full">Start Roadmap</Button>
-        </Link>
+        <div className="mt-auto pt-2">
+          <Link href={`/roadmaps/${roadmap.id}/start`} className="block">
+            <Button className="w-full">Start Roadmap</Button>
+          </Link>
+        </div>
       </CardContent>
     </Card>
   )
 
   return (
     <DashboardLayout>
-      <div className="container p-4 md:p-6 space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Explore Roadmaps</h1>
-            <p className="text-muted-foreground">Discover new learning paths and skills</p>
+      <div className="container max-w-7xl px-4 sm:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-1">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Explore Roadmaps</h1>
+            <p className="text-muted-foreground text-sm md:text-base">Discover new learning paths and skills</p>
           </div>
-          <div className="flex gap-2">
+          <div className="w-full sm:w-auto">
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
@@ -190,71 +192,71 @@ export default function ExploreRoadmapsPage() {
           </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+        <div className="relative max-w-2xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             placeholder="Search roadmaps..." 
-            className="pl-10"
+            className="pl-10 h-10 md:h-11"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        <Tabs defaultValue="recommended" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="recommended">Recommended</TabsTrigger>
-            <TabsTrigger value="all">All Roadmaps</TabsTrigger>
-            <TabsTrigger value="categories">Categories</TabsTrigger>
+        <Tabs defaultValue="recommended" className="space-y-6 md:space-y-8">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="recommended" className="flex-1 sm:flex-none">Recommended</TabsTrigger>
+            <TabsTrigger value="all" className="flex-1 sm:flex-none">All Roadmaps</TabsTrigger>
+            <TabsTrigger value="categories" className="flex-1 sm:flex-none">Categories</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="recommended" className="space-y-4">
+          <TabsContent value="recommended" className="space-y-6">
             {isLoading ? (
-              <div className="flex justify-center py-12">
+              <div className="flex justify-center py-12 md:py-16">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : recommendedRoadmaps.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {recommendedRoadmaps.map((roadmap) => (
                   <RoadmapCard key={roadmap.id} roadmap={roadmap} />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-medium">No recommended roadmaps</h3>
-                <p className="text-muted-foreground">Try exploring all roadmaps instead</p>
+              <div className="text-center py-12 md:py-16">
+                <h3 className="text-lg md:text-xl font-medium mb-2">No recommended roadmaps</h3>
+                <p className="text-muted-foreground mb-6">Try exploring all roadmaps instead</p>
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="all" className="space-y-4">
+          <TabsContent value="all" className="space-y-6">
             {isLoading ? (
-              <div className="flex justify-center py-12">
+              <div className="flex justify-center py-12 md:py-16">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : filteredRoadmaps.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredRoadmaps.map((roadmap) => (
                   <RoadmapCard key={roadmap.id} roadmap={roadmap} />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-medium">No roadmaps found</h3>
-                <p className="text-muted-foreground">Try adjusting your search or filters</p>
+              <div className="text-center py-12 md:py-16">
+                <h3 className="text-lg md:text-xl font-medium mb-2">No roadmaps found</h3>
+                <p className="text-muted-foreground mb-6">Try adjusting your search or filters</p>
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="categories" className="space-y-6">
+          <TabsContent value="categories" className="space-y-8 md:space-y-10">
             {isLoading ? (
-              <div className="flex justify-center py-12">
+              <div className="flex justify-center py-12 md:py-16">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : Object.keys(roadmapsByCategory).length > 0 ? (
               Object.entries(roadmapsByCategory).map(([category, roadmaps]) => (
-                <div key={category} className="space-y-4">
-                  <h2 className="text-xl font-semibold">{category}</h2>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div key={category} className="space-y-4 md:space-y-6">
+                  <h2 className="text-xl md:text-2xl font-semibold">{category}</h2>
+                  <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {roadmaps.map((roadmap) => (
                       <RoadmapCard key={roadmap.id} roadmap={roadmap} />
                     ))}
@@ -262,9 +264,9 @@ export default function ExploreRoadmapsPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-medium">No categories available</h3>
-                <p className="text-muted-foreground">Check back later for new content</p>
+              <div className="text-center py-12 md:py-16">
+                <h3 className="text-lg md:text-xl font-medium mb-2">No categories available</h3>
+                <p className="text-muted-foreground mb-6">Check back later for new content</p>
               </div>
             )}
           </TabsContent>
