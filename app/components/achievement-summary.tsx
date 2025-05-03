@@ -36,7 +36,7 @@ export function AchievementSummary({
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Badges Earned</CardTitle>
           </CardHeader>
@@ -46,9 +46,9 @@ export function AchievementSummary({
               Out of {totalBadges} total badges
             </p>
           </CardContent>
-        </Card>
+        </Card> */}
 
-        <Card>
+        {/* <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Achievement Progress</CardTitle>
           </CardHeader>
@@ -61,7 +61,7 @@ export function AchievementSummary({
               <Progress value={Math.round((badgesEarned / totalBadges) * 100)} />
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {recentBadges.length > 0 && (
