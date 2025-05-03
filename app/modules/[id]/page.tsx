@@ -13,6 +13,7 @@ import ModuleProgressButton from "./module-progress-button"
 import DiscussionList from "./discussion-list"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/use-toast"
+import { useUser } from "@/app/context/user-context"
 
 interface Resource {
   id: string
@@ -35,6 +36,7 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
   const resolvedParams = use(params)
   const router = useRouter()
   const supabase = createClientComponentClient()
+  const { user, profile, isLoading: isUserLoading } = useUser()
   const [isLoading, setIsLoading] = useState(true)
   const [module, setModule] = useState<any>(null)
   const [resources, setResources] = useState<Resource[]>([])
@@ -42,23 +44,20 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
   const [progress, setProgress] = useState<Progress | null>(null)
   const [selectedVideo, setSelectedVideo] = useState<Resource | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchModuleData()
-  }, [resolvedParams.id])
-
-  const fetchModuleData = async () => {
-    try {
-      setIsLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      
+    if (!isUserLoading) {
       if (!user) {
         router.push("/login")
         return
       }
+      fetchModuleData()
+    }
+  }, [resolvedParams.id, isUserLoading, user])
 
-      setUserId(user.id)
+  const fetchModuleData = async () => {
+    try {
+      setIsLoading(true)
 
       // Get module details
       const { data: moduleData } = await supabase
@@ -188,7 +187,7 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
   return (
     <DashboardLayout>
       <div className="container p-4 md:p-6 space-y-6">
-        {isLoading ? (
+        {isLoading || isUserLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
@@ -238,9 +237,9 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
                 <CardDescription>{module.description}</CardDescription>
               </CardHeader>
               <CardFooter>
-                {userId && progress && (
+                {user && progress && (
                   <ModuleProgressButton
-                    userId={userId}
+                    userId={user.id}
                     moduleId={resolvedParams.id}
                     currentStatus={progress.status}
                     xpReward={module.xp_reward}
@@ -318,7 +317,7 @@ export default function ModulePage({ params }: { params: Promise<{ id: string }>
                   <DiscussionList 
                     discussions={discussions || []} 
                     moduleId={resolvedParams.id} 
-                    userId={userId || ''} 
+                    userId={user?.id || ''} 
                   />
                 </div>
               </TabsContent>
