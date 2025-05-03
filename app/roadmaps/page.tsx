@@ -48,6 +48,47 @@ export default async function RoadmapsPage() {
     .eq("user_id", session.user.id)
     .eq("completed", true)
 
+  // Calculate progress for each roadmap
+  const roadmapsWithProgress = await Promise.all(
+    [...(activeRoadmaps || []), ...(completedRoadmaps || [])].map(async (userRoadmap) => {
+      // Get all modules for this roadmap
+      const { data: modules } = await supabase
+        .from("modules")
+        .select("id")
+        .eq("roadmap_id", userRoadmap.roadmap_id)
+
+      // Get completed modules
+      const { data: completedModules } = await supabase
+        .from("user_progress")
+        .select("module_id")
+        .eq("user_id", session.user.id)
+        .eq("status", "completed")
+        .in(
+          "module_id",
+          modules?.map((m) => m.id) || []
+        )
+
+      const totalModules = modules?.length || 0
+      const completedCount = completedModules?.length || 0
+      const progress = totalModules > 0 ? Math.round((completedCount / totalModules) * 100) : 0
+
+      return {
+        ...userRoadmap,
+        progress,
+        totalModules,
+        completedModules: completedCount
+      }
+    })
+  )
+
+  // Separate active and completed roadmaps with progress
+  const activeRoadmapsWithProgress = roadmapsWithProgress.filter(
+    (roadmap) => !roadmap.completed
+  )
+  const completedRoadmapsWithProgress = roadmapsWithProgress.filter(
+    (roadmap) => roadmap.completed
+  )
+
   return (
     <DashboardLayout>
       <div className="container p-4 md:p-6 space-y-6">
@@ -63,14 +104,14 @@ export default async function RoadmapsPage() {
 
         <Tabs defaultValue="active" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="active">Active ({activeRoadmaps?.length || 0})</TabsTrigger>
-            <TabsTrigger value="completed">Completed ({completedRoadmaps?.length || 0})</TabsTrigger>
+            <TabsTrigger value="active">Active ({activeRoadmapsWithProgress.length})</TabsTrigger>
+            <TabsTrigger value="completed">Completed ({completedRoadmapsWithProgress.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="active" className="space-y-4">
-            {activeRoadmaps && activeRoadmaps.length > 0 ? (
+            {activeRoadmapsWithProgress.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {activeRoadmaps.map((userRoadmap) => (
+                {activeRoadmapsWithProgress.map((userRoadmap) => (
                   <Card key={userRoadmap.id}>
                     <CardHeader>
                       <CardTitle>{userRoadmap.roadmaps.title}</CardTitle>
@@ -84,9 +125,12 @@ export default async function RoadmapsPage() {
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span>Progress</span>
-                          <span>30%</span>
+                          <span>{userRoadmap.progress}%</span>
                         </div>
-                        <Progress value={30} />
+                        <Progress value={userRoadmap.progress} />
+                        <p className="text-xs text-muted-foreground text-right">
+                          {userRoadmap.completedModules} of {userRoadmap.totalModules} modules completed
+                        </p>
                       </div>
                       <Link href={`/roadmaps/${userRoadmap.roadmap_id}`}>
                         <Button className="w-full">Continue Learning</Button>
@@ -107,9 +151,9 @@ export default async function RoadmapsPage() {
           </TabsContent>
 
           <TabsContent value="completed" className="space-y-4">
-            {completedRoadmaps && completedRoadmaps.length > 0 ? (
+            {completedRoadmapsWithProgress.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {completedRoadmaps.map((userRoadmap) => (
+                {completedRoadmapsWithProgress.map((userRoadmap) => (
                   <Card key={userRoadmap.id}>
                     <CardHeader>
                       <CardTitle>{userRoadmap.roadmaps.title}</CardTitle>
@@ -128,6 +172,9 @@ export default async function RoadmapsPage() {
                           <span>100%</span>
                         </div>
                         <Progress value={100} />
+                        <p className="text-xs text-muted-foreground text-right">
+                          {userRoadmap.completedModules} of {userRoadmap.totalModules} modules completed
+                        </p>
                       </div>
                       <Link href={`/roadmaps/${userRoadmap.roadmap_id}`}>
                         <Button variant="outline" className="w-full">
