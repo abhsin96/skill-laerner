@@ -12,6 +12,8 @@ import { Loader2, Plus, Trash2, Upload } from "lucide-react"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import Link from "next/link"
 
 interface Module {
   title: string
@@ -33,6 +35,8 @@ export default function CreateRoadmapPage() {
   const router = useRouter()
   const { supabase } = useSupabase()
   const [isLoading, setIsLoading] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -173,9 +177,12 @@ export default function CreateRoadmapPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setShowConfirmation(true)
+  }
 
+  const handleConfirmCreate = async () => {
     try {
+      setIsCreating(true)
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
@@ -184,43 +191,61 @@ export default function CreateRoadmapPage() {
       }
 
       // Create roadmap
-      const { data: roadmap, error: roadmapError } = await supabase
+      const { data: roadmapData, error: roadmapError } = await supabase
         .from("roadmaps")
         .insert({
           title: formData.title,
           description: formData.description,
           skill_category: formData.skill_category,
           duration_weeks: formData.duration_weeks,
-          created_by: user.id,
+          created_by: user.id
         })
         .select()
         .single()
 
       if (roadmapError) throw roadmapError
 
-      // Create modules and upload videos
+      // Create modules
       for (const module of modules) {
         const { data: moduleData, error: moduleError } = await supabase
           .from("modules")
           .insert({
+            roadmap_id: roadmapData.id,
             title: module.title,
             description: module.description,
             week_number: module.week_number,
-            xp_reward: module.xp_reward,
-            roadmap_id: roadmap.id,
+            xp_reward: module.xp_reward
           })
           .select()
           .single()
 
         if (moduleError) throw moduleError
 
-        // Create resources and upload videos
+        // Create resources
         for (const resource of module.resources) {
           let resourceUrl = resource.url
           
           // If it's a video resource with a file, upload it
           if (resource.type === "video" && resource.videoFile) {
-            resourceUrl = await uploadVideo(resource.videoFile)
+            const sanitizedFileName = `${Date.now()}-${resource.videoFile.name
+              .replace(/[^a-zA-Z0-9.-]/g, '_')
+              .replace(/\s+/g, '_')
+              .toLowerCase()}`
+
+            const { error: uploadError } = await supabase.storage
+              .from("contentvideo")
+              .upload(sanitizedFileName, resource.videoFile, {
+                cacheControl: "3600",
+                upsert: false,
+              })
+
+            if (uploadError) throw uploadError
+
+            const { data: { publicUrl } } = supabase.storage
+              .from("contentvideo")
+              .getPublicUrl(sanitizedFileName)
+
+            resourceUrl = publicUrl
           }
 
           const { error: resourceError } = await supabase
@@ -238,25 +263,35 @@ export default function CreateRoadmapPage() {
       }
 
       toast({
-        title: "Roadmap created!",
-        description: "Your roadmap has been created successfully.",
+        title: "Roadmap created",
+        description: "Your roadmap has been created successfully",
       })
 
-      router.push(`/roadmaps/${roadmap.id}`)
+      router.push("/dashboard")
       router.refresh()
     } catch (error: any) {
       toast({
         title: "Error creating roadmap",
-        description: error.message || "Something went wrong. Please try again.",
+        description: error.message || "Please try again later",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsCreating(false)
+      setShowConfirmation(false)
     }
   }
 
   return (
     <DashboardLayout>
+      {isCreating && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-lg font-medium">Creating Roadmap...</p>
+            <p className="text-sm text-muted-foreground">This may take a few moments</p>
+          </div>
+        </div>
+      )}
       <div className="container p-4 md:p-6 space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -530,19 +565,63 @@ export default function CreateRoadmapPage() {
             ))}
           </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create Roadmap"
-              )}
+          <div className="flex justify-end gap-2 pt-4">
+            <Link href="/roadmaps">
+              <Button variant="outline">Cancel</Button>
+            </Link>
+            <Button type="submit" disabled={isCreating}>
+              Create Roadmap
             </Button>
           </div>
         </form>
+
+        <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Roadmap Creation</AlertDialogTitle>
+              <AlertDialogDescription>
+                Please review the following details before creating your roadmap:
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="mt-4 space-y-2">
+              <div>
+                <h4 className="font-medium">Roadmap Details</h4>
+                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                  <li>Title: {formData.title}</li>
+                  <li>Category: {formData.skill_category}</li>
+                  <li>Duration: {formData.duration_weeks} weeks</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium">Modules ({modules.length})</h4>
+                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                  {modules.map((module, index) => (
+                    <li key={index}>
+                      Week {module.week_number}: {module.title} ({module.resources.length} resources)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmCreate}
+                disabled={isCreating}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Roadmap"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   )
