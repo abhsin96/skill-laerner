@@ -31,6 +31,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
+    
     const fetchUserData = async () => {
       const {
         data: { user },
@@ -67,27 +68,32 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     },
     ...(userRole === "content_curator"
       ? [
-          {
-            title: "Discussions",
-            href: "/discussions",
-            icon: <MessageSquare className="h-5 w-5" />,
-          },
-        ]
+        {
+          title: "Discussions",
+          href: "/discussions",
+          icon: <MessageSquare className="h-5 w-5" />,
+        },
+      ]
       : []),
     ...(userRole === "learner"
       ? [
-          {
-            title: "My Roadmaps",
-            href: "/roadmaps",
-            icon: <BookOpen className="h-5 w-5" />,
-          },
-        ]
+        {
+          title: "My Roadmaps",
+          href: "/roadmaps",
+          icon: <BookOpen className="h-5 w-5" />,
+        },
+      ]
       : []),
-    {
-      title: "Achievements",
-      href: "/achievements",
-      icon: <Trophy className="h-5 w-5" />,
-    },
+    ...(userRole === "learner"
+      ? [
+        {
+          title: "Achievements",
+          href: "/achievements",
+          icon: <Trophy className="h-5 w-5" />,
+        },
+      ]
+      : []),
+
     {
       title: "Profile",
       href: "/profile",

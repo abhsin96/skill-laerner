@@ -196,7 +196,7 @@ export default async function DashboardPage() {
             <>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Total Roadmaps</CardTitle>
+                  <CardTitle className="text-sm font-medium">{profile.role === "content_curator" ? "Total Created Content" : "Total Roadmaps"}</CardTitle>
                   <BookOpen className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -209,11 +209,13 @@ export default async function DashboardPage() {
                   <CardTitle className="text-sm font-medium">Total Modules</CardTitle>
                   <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
+               
                 <CardContent>
                   <div className="text-2xl font-bold">{totalModules}</div>
                   <p className="text-xs text-muted-foreground">Learning modules created</p>
                 </CardContent>
               </Card>
+              {profile.role === "learner" &&
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">Completed Modules</CardTitle>
@@ -224,6 +226,7 @@ export default async function DashboardPage() {
                   <p className="text-xs text-muted-foreground">Modules completed by learners</p>
                 </CardContent>
               </Card>
+              }
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
@@ -242,7 +245,7 @@ export default async function DashboardPage() {
 
         {profile.role === "content_curator" && uploadedContent && uploadedContent.length > 0 ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold">Your Roadmaps</h2>
+            <h2 className="text-xl font-bold">{profile.role === "content_curator" ? "Your Created Content" : "Your Roadmaps"}</h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {uploadedContent.map((roadmap) => (
                 <Card key={roadmap.id}>
@@ -263,17 +266,12 @@ export default async function DashboardPage() {
                       </Link>
                       <Link href={`/discussions?id=${roadmap.id}`}>
                         <Button variant="outline" className="w-full">
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        View Discussions
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          View Discussions
                         </Button>
                       </Link>
                     </div>
-                    {/* <Link href={`/discussions?id=${roadmap.id}`}>
-                      <Button variant="secondary" className="w-full">
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        View Discussions
-                      </Button>
-                    </Link> */}
+
                   </CardContent>
                 </Card>
               ))}

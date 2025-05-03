@@ -80,7 +80,7 @@ export default function EditProfileForm({ userId, profile }: EditProfileFormProp
       return
     }
 
-    if (!formData.learning_goals) {
+    if (profile.role !== "content_curator" && !formData.learning_goals) {
       toast({
         title: "Please enter your learning goals",
         variant: "destructive",
@@ -91,13 +91,21 @@ export default function EditProfileForm({ userId, profile }: EditProfileFormProp
     setIsLoading(true)
 
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          interests: selectedInterests,
+      const updateData = {
+        interests: selectedInterests,
+        ...(profile.role !== "content_curator" && {
           learning_goals: formData.learning_goals,
           weekly_learning_time: formData.weekly_learning_time,
-        })
+        }),
+        ...(profile.role === "content_curator" && {
+          specialization: selectedInterests,
+          learning_goals: "Content Curator",
+        }),
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update(updateData)
         .eq("user_id", userId)
 
       if (error) {
@@ -124,7 +132,11 @@ export default function EditProfileForm({ userId, profile }: EditProfileFormProp
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
-        <Label>What are you interested in learning?</Label>
+        <Label>
+          {profile.role === "content_curator"
+            ? "What are your areas of expertise?"
+            : "What are you interested in learning?"}
+        </Label>
         <div className="grid grid-cols-2 gap-2">
           {INTERESTS.map((interest) => (
             <div key={interest} className="flex items-center space-x-2">
@@ -141,34 +153,38 @@ export default function EditProfileForm({ userId, profile }: EditProfileFormProp
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="learning_goals">What are your learning goals?</Label>
-        <Textarea
-          id="learning_goals"
-          name="learning_goals"
-          placeholder="I want to learn..."
-          rows={3}
-          value={formData.learning_goals}
-          onChange={handleChange}
-        />
-      </div>
+      {profile.role !== "content_curator" && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="learning_goals">What are your learning goals?</Label>
+            <Textarea
+              id="learning_goals"
+              name="learning_goals"
+              placeholder="I want to learn..."
+              rows={3}
+              value={formData.learning_goals}
+              onChange={handleChange}
+            />
+          </div>
 
-      <div className="space-y-2">
-        <Label>How much time can you dedicate to learning each week?</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {TIME_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={formData.weekly_learning_time === option.value ? "default" : "outline"}
-              onClick={() => handleTimeChange(option.value)}
-              className="w-full"
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+          <div className="space-y-2">
+            <Label>How much time can you dedicate to learning each week?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {TIME_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={formData.weekly_learning_time === option.value ? "default" : "outline"}
+                  onClick={() => handleTimeChange(option.value)}
+                  className="w-full"
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
