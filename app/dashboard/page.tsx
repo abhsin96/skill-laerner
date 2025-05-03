@@ -55,11 +55,40 @@ export default async function DashboardPage() {
         title,
         description,
         skill_category,
-        duration_weeks
+        duration_weeks,
+        modules (
+          id,
+          title,
+          description,
+          week_number,
+          xp_reward
+        )
       )
     `)
     .eq("user_id", session.user.id)
     .eq("completed", false)
+
+  // Get user progress for all modules
+  const { data: userProgress } = await supabase
+    .from("user_progress")
+    .select("module_id, status")
+    .eq("user_id", session.user.id)
+
+  // Calculate progress for each roadmap
+  const roadmapsWithProgress = userRoadmaps?.map(roadmap => {
+    const totalModules = roadmap.roadmaps.modules?.length || 0
+    const completedModules = roadmap.roadmaps.modules?.filter((module: Module) => 
+      userProgress?.some(progress => 
+        progress.module_id === module.id && progress.status === "completed"
+      )
+    ).length || 0
+    const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0
+
+    return {
+      ...roadmap,
+      progress
+    }
+  })
 
   // Get user's XP
   const { data: xpData } = await supabase.from("xp_transactions").select("amount").eq("user_id", session.user.id)
@@ -283,7 +312,7 @@ export default async function DashboardPage() {
           <div className="space-y-4">
             <h2 className="text-xl font-bold">Your Active Roadmaps</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              {userRoadmaps.map((userRoadmap) => (
+              {roadmapsWithProgress?.map((userRoadmap) => (
                 <Card key={userRoadmap.id}>
                   <CardHeader>
                     <CardTitle>{userRoadmap.roadmaps.title}</CardTitle>
@@ -293,9 +322,9 @@ export default async function DashboardPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>Progress</span>
-                        <span>30%</span>
+                        <span>{userRoadmap.progress}%</span>
                       </div>
-                      <Progress value={30} />
+                      <Progress value={userRoadmap.progress} />
                     </div>
                     <Link href={`/roadmaps/${userRoadmap.roadmap_id}`}>
                       <Button variant="outline" className="w-full">
