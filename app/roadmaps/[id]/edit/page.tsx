@@ -14,6 +14,7 @@ import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DraggableProvided } from "@hello-pangea/dnd"
 import { Label } from "@/components/ui/label"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 const SKILL_CATEGORIES = [
   "Web Development",
@@ -78,6 +79,7 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
     resources: [] as Resource[]
   })
   const [isAddingModule, setIsAddingModule] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     fetchRoadmapData()
@@ -397,6 +399,109 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  const handleDeleteRoadmap = async () => {
+    try {
+      setIsDeleting(true)
+
+      // First, get all modules to find video resources
+      const { data: modulesData } = await supabase
+        .from("modules")
+        .select(`
+          id,
+          resources (
+            id,
+            type,
+            url
+          )
+        `)
+        .eq("roadmap_id", resolvedParams.id)
+
+      if (modulesData) {
+        // Get array of module IDs
+        const moduleIds = modulesData.map(m => m.id)
+
+        // Delete video files from storage
+        for (const module of modulesData) {
+          for (const resource of module.resources || []) {
+            if (resource.type === "video" && resource.url) {
+              // Extract filename from URL
+              const filename = resource.url.split("/").pop()
+              if (filename) {
+                await supabase.storage
+                  .from("contentvideo")
+                  .remove([filename])
+              }
+            }
+          }
+        }
+
+        // Delete XP transactions first
+        const { error: xpTransactionsError } = await supabase
+          .from("xp_transactions")
+          .delete()
+          .in("module_id", moduleIds)
+
+        if (xpTransactionsError) throw xpTransactionsError
+
+        // Delete all resources using in operator
+        const { error: resourcesError } = await supabase
+          .from("resources")
+          .delete()
+          .in("module_id", moduleIds)
+
+        if (resourcesError) throw resourcesError
+
+        // Delete all user progress using in operator
+        const { error: progressError } = await supabase
+          .from("user_progress")
+          .delete()
+          .in("module_id", moduleIds)
+
+        if (progressError) throw progressError
+
+        // Delete all modules
+        const { error: modulesError } = await supabase
+          .from("modules")
+          .delete()
+          .eq("roadmap_id", resolvedParams.id)
+
+        if (modulesError) throw modulesError
+
+        // Delete user roadmaps
+        const { error: userRoadmapsError } = await supabase
+          .from("user_roadmaps")
+          .delete()
+          .eq("roadmap_id", resolvedParams.id)
+
+        if (userRoadmapsError) throw userRoadmapsError
+
+        // Finally delete the roadmap
+        const { error: roadmapError } = await supabase
+          .from("roadmaps")
+          .delete()
+          .eq("id", resolvedParams.id)
+
+        if (roadmapError) throw roadmapError
+
+        toast({
+          title: "Roadmap deleted",
+          description: "The roadmap and all its associated content have been removed successfully",
+        })
+
+        router.push("/dashboard")
+        router.refresh()
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error deleting roadmap",
+        description: error.message || "Please try again later",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -409,14 +514,70 @@ export default function EditRoadmapPage({ params }: { params: Promise<{ id: stri
 
   return (
     <DashboardLayout>
+      {isDeleting && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-lg font-medium">Deleting Roadmap...</p>
+            <p className="text-sm text-muted-foreground">This may take a few moments</p>
+          </div>
+        </div>
+      )}
       <div className="container p-4 md:p-6 space-y-6">
-        <div className="flex items-center gap-2">
-          <Link href={`/roadmaps/${resolvedParams.id}`}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight">Edit Roadmap</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link href={`/roadmaps/${resolvedParams.id}`}>
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <h1 className="text-2xl font-bold tracking-tight">Edit Roadmap</h1>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={isDeleting}>
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete Roadmap"
+                )}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure you want to delete this roadmap?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the roadmap and all its associated content including:
+                  <ul className="list-disc list-inside mt-2">
+                    <li>All modules and their content</li>
+                    <li>All video resources</li>
+                    <li>User progress data</li>
+                    <li>Discussion threads</li>
+                  </ul>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteRoadmap}
+                  disabled={isDeleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Roadmap"
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
