@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -52,9 +52,9 @@ interface Discussion {
   comments?: Comment[]
 }
 
-export default function DiscussionsPage() {
+export default function DiscussionsPage({searchParams}: {searchParams: {id: string}}) {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  // const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
   const [isLoading, setIsLoading] = useState(true)
   const [discussions, setDiscussions] = useState<Discussion[]>([])
@@ -65,7 +65,7 @@ export default function DiscussionsPage() {
 
   useEffect(() => {
     // Get roadmap ID from URL if present
-    const roadmapId = searchParams.get("id")
+    const roadmapId = searchParams?.id
     if (roadmapId) {
       setSelectedRoadmap(roadmapId)
     }

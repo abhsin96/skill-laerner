@@ -331,7 +331,7 @@ export default async function DashboardPage() {
                     <CardDescription>{userRoadmap.roadmaps.description}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-2">
+                    <div className="space-y-2 mb-2">
                       <div className="flex justify-between text-sm">
                         <span>Progress</span>
                         <span>{userRoadmap.progress}%</span>
