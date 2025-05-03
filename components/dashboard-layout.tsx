@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { BookOpen, LayoutDashboard, LogOut, Menu, Settings, Trophy, User } from "lucide-react"
+import { BookOpen, LayoutDashboard, LogOut, Menu, Settings, Trophy, User, MessageSquare } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
@@ -28,6 +28,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { supabase } = useSupabase()
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -38,11 +39,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       if (user) {
         setUser(user)
 
-        // Check if user is admin
+        // Check if user is admin or content curator
         const { data: profile } = await supabase.from("profiles").select("role").eq("user_id", user.id).single()
 
-        if (profile && profile.role === "admin") {
-          setIsAdmin(true)
+        if (profile) {
+          setUserRole(profile.role)
+          if (profile.role === "admin") {
+            setIsAdmin(true)
+          }
         }
       }
     }
@@ -57,22 +61,35 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navItems = [
     {
-      name: "Dashboard",
+      title: "Dashboard",
       href: "/dashboard",
       icon: <LayoutDashboard className="h-5 w-5" />,
     },
+    ...(userRole === "content_curator"
+      ? [
+          {
+            title: "Discussions",
+            href: "/discussions",
+            icon: <MessageSquare className="h-5 w-5" />,
+          },
+        ]
+      : []),
+    ...(userRole === "learner"
+      ? [
+          {
+            title: "My Roadmaps",
+            href: "/roadmaps",
+            icon: <BookOpen className="h-5 w-5" />,
+          },
+        ]
+      : []),
     {
-      name: "My Roadmaps",
-      href: "/roadmaps",
-      icon: <BookOpen className="h-5 w-5" />,
-    },
-    {
-      name: "Achievements",
+      title: "Achievements",
       href: "/achievements",
       icon: <Trophy className="h-5 w-5" />,
     },
     {
-      name: "Profile",
+      title: "Profile",
       href: "/profile",
       icon: <User className="h-5 w-5" />,
     },
@@ -119,7 +136,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       )}
                     >
                       {item.icon}
-                      {item.name}
+                      {item.title}
                     </Link>
                   ))}
                   {isAdmin && (
@@ -189,7 +206,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 )}
               >
                 {item.icon}
-                {item.name}
+                {item.title}
               </Link>
             ))}
             {isAdmin && (

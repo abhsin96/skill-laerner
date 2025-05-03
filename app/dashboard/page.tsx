@@ -4,7 +4,7 @@ import DashboardLayout from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { BookOpen, Clock, Target, Trophy, FileText, CheckCircle, Users } from "lucide-react"
+import { BookOpen, Clock, Target, Trophy, FileText, CheckCircle, Users, ArrowLeft, MessageSquare } from "lucide-react"
 import Link from "next/link"
 
 interface Module {
@@ -242,8 +242,8 @@ export default async function DashboardPage() {
 
         {profile.role === "content_curator" && uploadedContent && uploadedContent.length > 0 ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold">Your Learning Content</h2>
-            <div className="grid gap-4 md:grid-cols-2">
+            <h2 className="text-xl font-bold">Your Roadmaps</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {uploadedContent.map((roadmap) => (
                 <Card key={roadmap.id}>
                   <CardHeader>
@@ -251,54 +251,29 @@ export default async function DashboardPage() {
                     <CardDescription>{roadmap.description}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>{roadmap.modules?.length || 0} Modules</span>
-                      <span>{roadmap.duration_weeks} weeks</span>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{roadmap.skill_category}</span>
+                      <span className="text-muted-foreground">{roadmap.duration_weeks} weeks</span>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Completion Rate</span>
-                        <span>
-                          {roadmap.modules?.length
-                            ? Math.round(
-                                ((contentStats?.filter(
-                                  (stat: UserProgress) =>
-                                    stat.status === "completed" &&
-                                    roadmap.modules?.some((m: Module) => m.id === stat.module_id)
-                                ).length || 0) /
-                                  roadmap.modules.length) *
-                                  100
-                              )
-                            : 0}
-                          %
-                        </span>
-                      </div>
-                      <Progress
-                        value={
-                          roadmap.modules?.length
-                            ? ((contentStats?.filter(
-                                (stat: UserProgress) =>
-                                  stat.status === "completed" &&
-                                  roadmap.modules?.some((m: Module) => m.id === stat.module_id)
-                              ).length || 0) /
-                                roadmap.modules.length) *
-                              100
-                            : 0
-                        }
-                      />
-                    </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                       <Link href={`/roadmaps/${roadmap.id}/edit`}>
                         <Button variant="outline" className="w-full">
                           Edit Roadmap
                         </Button>
                       </Link>
-                      <Link href={`/roadmaps/${roadmap.id}/analytics`}>
+                      <Link href={`/discussions?id=${roadmap.id}`}>
                         <Button variant="outline" className="w-full">
-                          View Analytics
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        View Discussions
                         </Button>
                       </Link>
                     </div>
+                    {/* <Link href={`/discussions?id=${roadmap.id}`}>
+                      <Button variant="secondary" className="w-full">
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        View Discussions
+                      </Button>
+                    </Link> */}
                   </CardContent>
                 </Card>
               ))}
