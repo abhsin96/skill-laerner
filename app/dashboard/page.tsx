@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { BookOpen, Clock, Target, Trophy, FileText, CheckCircle, Users, ArrowLeft, MessageSquare } from "lucide-react"
 import Link from "next/link"
+import { AchievementSummary } from "../components/achievement-summary"
+import { DEFAULT_BADGES } from "@/app/lib/badges"
 
 interface Module {
   id: string
@@ -90,24 +92,31 @@ export default async function DashboardPage() {
     }
   })
 
-  // Get user's XP
-  const { data: xpData } = await supabase.from("xp_transactions").select("amount").eq("user_id", session.user.id)
-
-  const totalXp = xpData?.reduce((sum, transaction) => sum + transaction.amount, 0) || 0
-
-  // Get user's badges
-  const { data: badges } = await supabase
-    .from("user_badges")
-    .select(`
-      *,
-      badges:badge_id (
-        id,
-        name,
-        description,
-        image_url
-      )
-    `)
+  // Get user's stats
+  const { data: userStats } = await supabase
+    .from("user_stats")
+    .select("*")
     .eq("user_id", session.user.id)
+    .single()
+
+  // Get user's earned badges
+  const { data: earnedBadges } = await supabase
+    .from("user_badges")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("earned_at", { ascending: false })
+    .limit(3)
+
+  // Get recent badges with details
+  const recentBadges = earnedBadges?.map((earnedBadge) => {
+    const badge = DEFAULT_BADGES.find((b) => b.id === earnedBadge.badge_id)
+    return {
+      id: earnedBadge.badge_id,
+      name: badge?.name || "",
+      icon: badge?.icon || "",
+      earnedAt: new Date(earnedBadge.earned_at),
+    }
+  }) || []
 
   // Get content curator's uploaded content
   const { data: uploadedContent } = await supabase
@@ -173,6 +182,13 @@ export default async function DashboardPage() {
           )}
         </div>
 
+        <AchievementSummary
+          xpEarned={userStats?.xp_earned || 0}
+          badgesEarned={earnedBadges?.length || 0}
+          totalBadges={DEFAULT_BADGES.length}
+          recentBadges={recentBadges}
+        />
+
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {profile.role === "learner" ? (
             <>
@@ -200,24 +216,22 @@ export default async function DashboardPage() {
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Total XP</CardTitle>
-                  <Target className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-medium">Completed Modules</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{totalXp}</div>
+                  <div className="text-2xl font-bold">{userStats?.modules_completed || 0}</div>
                   <p className="text-xs text-muted-foreground">Keep learning to earn more!</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Badges Earned</CardTitle>
+                  <CardTitle className="text-sm font-medium">Perfect Weeks</CardTitle>
                   <Trophy className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{badges?.length || 0}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {badges?.length === 0 ? "Complete modules to earn badges!" : "Great achievements!"}
-                  </p>
+                  <div className="text-2xl font-bold">{userStats?.perfect_weeks || 0}</div>
+                  <p className="text-xs text-muted-foreground">Weeks with perfect attendance</p>
                 </CardContent>
               </Card>
             </>
@@ -238,13 +252,11 @@ export default async function DashboardPage() {
                   <CardTitle className="text-sm font-medium">Total Modules</CardTitle>
                   <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
-               
                 <CardContent>
                   <div className="text-2xl font-bold">{totalModules}</div>
                   <p className="text-xs text-muted-foreground">Learning modules created</p>
                 </CardContent>
               </Card>
-              {profile.role === "learner" &&
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">Completed Modules</CardTitle>
@@ -255,7 +267,6 @@ export default async function DashboardPage() {
                   <p className="text-xs text-muted-foreground">Modules completed by learners</p>
                 </CardContent>
               </Card>
-              }
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">Engagement Rate</CardTitle>
@@ -300,7 +311,6 @@ export default async function DashboardPage() {
                         </Button>
                       </Link>
                     </div>
-
                   </CardContent>
                 </Card>
               ))}

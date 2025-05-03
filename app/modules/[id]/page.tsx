@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, CheckCircle, Circle, Clock, ExternalLink, MessageSquare, Video } from "lucide-react"
 import Link from "next/link"
-import ModuleProgressButton from "./module-progress-button"
+import { ModuleProgressButton } from "./module-progress-button"
 import DiscussionList from "./discussion-list"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/use-toast"

@@ -1,10 +1,9 @@
 import { createServerSupabaseClient, getSession } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import DashboardLayout from "@/components/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
+import { BadgeCard } from "../components/badge-card"
+import { DEFAULT_BADGES, calculateBadgeProgress } from "@/app/lib/badges"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Award, Star, Trophy } from "lucide-react"
 
 export default async function AchievementsPage() {
   const session = await getSession()
@@ -15,53 +14,53 @@ export default async function AchievementsPage() {
 
   const supabase = createServerSupabaseClient()
 
-  // Get user's XP
-  const { data: xpData } = await supabase.from("xp_transactions").select("amount").eq("user_id", session.user.id)
-
-  const totalXp = xpData?.reduce((sum, transaction) => sum + transaction.amount, 0) || 0
-
-  // Get user's badges
-  const { data: userBadges } = await supabase
+  // Get user's earned badges
+  const { data: earnedBadges } = await supabase
     .from("user_badges")
-    .select(`
-      *,
-      badges:badge_id (
-        id,
-        name,
-        description,
-        image_url,
-        badge_type,
-        requirement
-      )
-    `)
+    .select("*")
     .eq("user_id", session.user.id)
 
-  // Get all available badges
-  const { data: allBadges } = await supabase.from("badges").select("*")
+  // Get user's stats
+  const { data: userStats } = await supabase
+    .from("user_stats")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .single()
 
-  // Separate badges by type
-  const earnedBadges = userBadges || []
-  const earnedBadgeIds = earnedBadges.map((ub) => ub.badge_id)
+  // Calculate progress for each badge
+  const badgesWithProgress = DEFAULT_BADGES.map((badge) => {
+    const earnedBadge = earnedBadges?.find((b) => b.badge_id === badge.id)
+    const progress = calculateBadgeProgress(badge.criteria, {
+      modulesCompleted: userStats?.modules_completed || 0,
+      roadmapsCompleted: userStats?.roadmaps_completed || 0,
+      discussionsCreated: userStats?.discussions_created || 0,
+      commentsMade: userStats?.comments_made || 0,
+      xpEarned: userStats?.xp_earned || 0,
+      consecutiveDays: userStats?.consecutive_days || 0,
+      perfectWeeks: userStats?.perfect_weeks || 0,
+      earlyBirdCompletions: userStats?.early_bird_completions || 0,
+      nightOwlCompletions: userStats?.night_owl_completions || 0,
+    })
 
-  const availableBadges = (allBadges || []).filter((badge) => !earnedBadgeIds.includes(badge.id))
+    return {
+      badge,
+      progress,
+      earned: !!earnedBadge,
+      earnedAt: earnedBadge?.earned_at ? new Date(earnedBadge.earned_at) : undefined,
+    }
+  })
 
-  // Group badges by type
-  const groupBadgesByType = (badges: any[]) => {
-    return badges.reduce(
-      (acc, badge) => {
-        const type = badge.badge_type || badge.badges.badge_type
-        if (!acc[type]) {
-          acc[type] = []
-        }
-        acc[type].push(badge)
-        return acc
-      },
-      {} as Record<string, any[]>,
-    )
-  }
-
-  const earnedByType = groupBadgesByType(earnedBadges)
-  const availableByType = groupBadgesByType(availableBadges)
+  // Group badges by category
+  const badgesByCategory = badgesWithProgress.reduce(
+    (acc, { badge, progress, earned, earnedAt }) => {
+      if (!acc[badge.category]) {
+        acc[badge.category] = []
+      }
+      acc[badge.category].push({ badge, progress, earned, earnedAt })
+      return acc
+    },
+    {} as Record<string, typeof badgesWithProgress>
+  )
 
   return (
     <DashboardLayout>
@@ -71,123 +70,50 @@ export default async function AchievementsPage() {
           <p className="text-muted-foreground">Track your progress and earn badges</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Total XP</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{totalXp}</div>
-              <p className="text-sm text-muted-foreground">Keep learning to earn more XP</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Badges Earned</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{earnedBadges.length}</div>
-              <p className="text-sm text-muted-foreground">Out of {(allBadges || []).length} total badges</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Achievement Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Overall</span>
-                  <span>{Math.round((earnedBadges.length / (allBadges?.length || 1)) * 100)}%</span>
-                </div>
-                <Progress value={Math.round((earnedBadges.length / (allBadges?.length || 1)) * 100)} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Tabs defaultValue="earned" className="space-y-4">
+        <Tabs defaultValue="all" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="earned">Earned Badges ({earnedBadges.length})</TabsTrigger>
-            <TabsTrigger value="available">Available Badges ({availableBadges.length})</TabsTrigger>
+            <TabsTrigger value="all">All Badges</TabsTrigger>
+            <TabsTrigger value="learning">Learning</TabsTrigger>
+            <TabsTrigger value="engagement">Engagement</TabsTrigger>
+            <TabsTrigger value="mastery">Mastery</TabsTrigger>
+            <TabsTrigger value="social">Social</TabsTrigger>
+            <TabsTrigger value="special">Special</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="earned" className="space-y-6">
-            {Object.keys(earnedByType).length > 0 ? (
-              Object.entries(earnedByType).map(([type, badges]) => (
-                <div key={type} className="space-y-4">
-                  <h2 className="text-xl font-semibold capitalize">{type} Badges</h2>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {badges.map((badge) => (
-                      <Card key={badge.id}>
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">{badge.badges.name}</CardTitle>
-                            <Trophy className="h-5 w-5 text-primary" />
-                          </div>
-                          <CardDescription>{badge.badges.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Earned on</span>
-                            <span>{new Date(badge.earned_at).toLocaleDateString()}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+          <TabsContent value="all" className="space-y-6">
+            {Object.entries(badgesByCategory).map(([category, badges]) => (
+              <div key={category} className="space-y-4">
+                <h2 className="text-xl font-semibold capitalize">{category}</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {badges.map(({ badge, progress, earned, earnedAt }) => (
+                    <BadgeCard
+                      key={badge.id}
+                      badge={badge}
+                      progress={progress}
+                      earned={earned}
+                      earnedAt={earnedAt}
+                    />
+                  ))}
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium">No badges earned yet</h3>
-                <p className="text-muted-foreground">Complete modules and stay consistent to earn badges</p>
               </div>
-            )}
+            ))}
           </TabsContent>
 
-          <TabsContent value="available" className="space-y-6">
-            {Object.keys(availableByType).length > 0 ? (
-              Object.entries(availableByType).map(([type, badges]) => (
-                <div key={type} className="space-y-4">
-                  <h2 className="text-xl font-semibold capitalize">{type} Badges</h2>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {badges.map((badge) => (
-                      <Card key={badge.id} className="opacity-70">
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">{badge.name}</CardTitle>
-                            <Award className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <CardDescription>{badge.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Requirement</span>
-                            <span>
-                              {badge.requirement}{" "}
-                              {badge.badge_type === "streak"
-                                ? "days"
-                                : badge.badge_type === "progress"
-                                  ? "modules"
-                                  : "mastery points"}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <Star className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium">You've earned all available badges!</h3>
-                <p className="text-muted-foreground">Check back later for new badges to earn</p>
+          {Object.entries(badgesByCategory).map(([category, badges]) => (
+            <TabsContent key={category} value={category} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {badges.map(({ badge, progress, earned, earnedAt }) => (
+                  <BadgeCard
+                    key={badge.id}
+                    badge={badge}
+                    progress={progress}
+                    earned={earned}
+                    earnedAt={earnedAt}
+                  />
+                ))}
               </div>
-            )}
-          </TabsContent>
+            </TabsContent>
+          ))}
         </Tabs>
       </div>
     </DashboardLayout>

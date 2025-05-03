@@ -1,51 +1,60 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { useSupabase } from "@/components/supabase-provider"
 import { Button } from "@/components/ui/button"
-import { toast } from "@/components/ui/use-toast"
-import { CheckCircle, Loader2, Play } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { updateUserStats } from "@/app/lib/badge-service"
 
 interface ModuleProgressButtonProps {
   userId: string
   moduleId: string
-  currentStatus: "not_started" | "in_progress" | "completed"
-  xpReward: number
-  onStatusChange?: (newStatus: "not_started" | "in_progress" | "completed") => void
+  currentStatus: "not_started" | "in_progress" | "completed" | null
+  xpReward?: number
+  onStatusChange?: (status: "not_started" | "in_progress" | "completed") => void
 }
 
-export default function ModuleProgressButton({ 
-  userId, 
-  moduleId, 
-  currentStatus, 
+export function ModuleProgressButton({
+  userId,
+  moduleId,
+  currentStatus,
   xpReward,
-  onStatusChange 
+  onStatusChange,
 }: ModuleProgressButtonProps) {
-  const router = useRouter()
-  const { supabase } = useSupabase()
+  const [status, setStatus] = useState<"not_started" | "in_progress" | "completed" | null>(currentStatus)
   const [isLoading, setIsLoading] = useState(false)
-  const [status, setStatus] = useState(currentStatus)
+  const { toast } = useToast()
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
   const handleUpdateProgress = async () => {
-    setIsLoading(true)
-
     try {
-      let newStatus: "not_started" | "in_progress" | "completed"
-      let xpToAward = 0
+      setIsLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
 
+      if (!session) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to update progress.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const now = new Date()
+      const hour = now.getHours()
+      const isEarlyBird = hour >= 5 && hour < 9
+      const isNightOwl = hour >= 22 || hour < 5
+
+      let newStatus: "not_started" | "in_progress" | "completed" = "not_started"
       if (status === "not_started") {
         newStatus = "in_progress"
       } else if (status === "in_progress") {
         newStatus = "completed"
-        xpToAward = xpReward
-      } else {
-        // Already completed, nothing to do
-        setIsLoading(false)
-        return
       }
 
-      // First, check if progress entry exists
+      // First, check if there's an existing progress entry
       const { data: existingProgress, error: checkError } = await supabase
         .from("user_progress")
         .select("*")
@@ -53,73 +62,61 @@ export default function ModuleProgressButton({
         .eq("module_id", moduleId)
         .single()
 
-      if (checkError && checkError.code !== "PGRST116") { // PGRST116 is "no rows returned" error
+      if (checkError && checkError.code !== "PGRST116") {
         throw checkError
       }
 
-      let progressError
-      if (!existingProgress) {
-        // Create new progress entry
-        const { error } = await supabase
+      let error
+      if (existingProgress) {
+        // Update existing progress
+        const { error: updateError } = await supabase
+          .from("user_progress")
+          .update({
+            status: newStatus,
+            completed_at: newStatus === "completed" ? now.toISOString() : null,
+          })
+          .eq("user_id", userId)
+          .eq("module_id", moduleId)
+        error = updateError
+      } else {
+        // Insert new progress
+        const { error: insertError } = await supabase
           .from("user_progress")
           .insert({
             user_id: userId,
             module_id: moduleId,
             status: newStatus,
-            completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+            started_at: newStatus === "in_progress" ? now.toISOString() : null,
+            completed_at: newStatus === "completed" ? now.toISOString() : null,
           })
-        progressError = error
-      } else {
-        // Update existing progress
-        const { error } = await supabase
-          .from("user_progress")
-          .update({
-            status: newStatus,
-            completed_at: newStatus === "completed" ? new Date().toISOString() : null,
-          })
-          .eq("user_id", userId)
-          .eq("module_id", moduleId)
-        progressError = error
+        error = insertError
       }
 
-      if (progressError) {
-        throw progressError
+      if (error) {
+        throw error
       }
 
-      // Update local state
+      // Update user stats and check for badges
+      await updateUserStats(userId, {
+        modulesCompleted: newStatus === "completed" ? 1 : 0,
+        earlyBirdCompletions: newStatus === "completed" && isEarlyBird ? 1 : 0,
+        nightOwlCompletions: newStatus === "completed" && isNightOwl ? 1 : 0,
+      })
+
       setStatus(newStatus)
-      // Notify parent component
       onStatusChange?.(newStatus)
 
-      // Award XP if module is completed
-      if (xpToAward > 0) {
-        const { error: xpError } = await supabase.from("xp_transactions").insert({
-          user_id: userId,
-          amount: xpToAward,
-          description: "Completed module",
-          module_id: moduleId,
-        })
-
-        if (xpError) {
-          throw xpError
-        }
-
-        toast({
-          title: "Module completed!",
-          description: `You earned ${xpToAward} XP for completing this module.`,
-        })
-      } else if (newStatus === "in_progress") {
-        toast({
-          title: "Module started",
-          description: "Your progress has been saved.",
-        })
-      }
+      toast({
+        title: "Success",
+        description: `Module marked as ${newStatus.replace("_", " ")}`,
+      })
 
       router.refresh()
     } catch (error: any) {
+      console.error("Error updating progress:", error)
       toast({
-        title: "Error updating progress",
-        description: error.message || "Something went wrong. Please try again.",
+        title: "Error",
+        description: error.message || "Failed to update progress. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -127,29 +124,36 @@ export default function ModuleProgressButton({
     }
   }
 
-  if (status === "completed") {
-    return (
-      <Button variant="outline" disabled className="w-full">
-        <CheckCircle className="mr-2 h-4 w-4" /> Module Completed
-      </Button>
-    )
+  const getButtonText = () => {
+    switch (status) {
+      case "in_progress":
+        return "Mark as Completed"
+      case "completed":
+        return "Completed"
+      default:
+        return "Start Module"
+    }
+  }
+
+  const getButtonVariant = () => {
+    switch (status) {
+      case "in_progress":
+        return "default"
+      case "completed":
+        return "secondary"
+      default:
+        return "default"
+    }
   }
 
   return (
-    <Button onClick={handleUpdateProgress} className="w-full" disabled={isLoading}>
-      {isLoading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...
-        </>
-      ) : status === "not_started" ? (
-        <>
-          <Play className="mr-2 h-4 w-4" /> Start Module
-        </>
-      ) : (
-        <>
-          <CheckCircle className="mr-2 h-4 w-4" /> Mark as Completed
-        </>
-      )}
+    <Button
+      onClick={handleUpdateProgress}
+      disabled={status === "completed" || isLoading}
+      variant={getButtonVariant()}
+      className="w-full"
+    >
+      {isLoading ? "Updating..." : getButtonText()}
     </Button>
   )
 }
